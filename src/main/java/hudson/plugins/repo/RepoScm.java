@@ -783,7 +783,7 @@ public class RepoScm extends SCM implements Serializable {
 		    commands.add("--trace");
 		}
 		commands.add("sync");
-		commands.add("-d");
+//		commands.add("-d");
 		if (isCurrentBranch()) {
 			commands.add("-c");
 		}
