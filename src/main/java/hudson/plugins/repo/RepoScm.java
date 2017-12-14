@@ -81,8 +81,8 @@ public class RepoScm extends SCM implements Serializable {
 
 	private static Logger debug = Logger
 			.getLogger("hudson.plugins.repo.RepoScm");
-
 	private final String manifestRepositoryUrl;
+    private static final String JENKINS_BRANCH = "jenkins_fetch";
 
 	// Advanced Fields:
 	@CheckForNull private String manifestFile;
@@ -95,7 +95,7 @@ public class RepoScm extends SCM implements Serializable {
 	@CheckForNull private String localManifest;
 	@CheckForNull private String destinationDir;
 	@CheckForNull private boolean currentBranch;
-	@CheckForNull private boolean resetFirst;
+	@CheckForNull private boolean resetFirst = true;
 	@CheckForNull private boolean cleanFirst;
 	@CheckForNull private boolean quiet;
 	@CheckForNull private boolean forceSync;
@@ -750,21 +750,21 @@ public class RepoScm extends SCM implements Serializable {
 			final OutputStream logger, final EnvVars env)
 		throws IOException, InterruptedException {
 		final List<String> commands = new ArrayList<String>(4);
-		debug.log(Level.FINE, "Syncing out code in: " + workspace.getName());
+		debug.log(Level.INFO, "Syncing out code in: " + workspace.getName());
 		commands.clear();
-		if (resetFirst) {
-			commands.add(getDescriptor().getExecutable());
-			commands.add("forall");
-			commands.add("-c");
-			commands.add("git reset --hard");
-			int resetCode = launcher.launch().stdout(logger)
-				.stderr(logger).pwd(workspace).cmds(commands).envs(env).join();
 
-			if (resetCode != 0) {
-				debug.log(Level.WARNING, "Failed to reset first.");
-			}
-			commands.clear();
-		}
+        commands.add(getDescriptor().getExecutable());
+        commands.add("forall");
+        commands.add("-c");
+        commands.add("git reset --hard HEAD");
+        int resetCode = launcher.launch().stdout(logger)
+                .stderr(logger).pwd(workspace).cmds(commands).envs(env).join();
+
+        if (resetCode != 0) {
+            debug.log(Level.WARNING, "Failed to reset first.");
+        }
+        commands.clear();
+
 		if (cleanFirst) {
 			commands.add(getDescriptor().getExecutable());
 			commands.add("forall");
@@ -783,7 +783,6 @@ public class RepoScm extends SCM implements Serializable {
 		    commands.add("--trace");
 		}
 		commands.add("sync");
-//		commands.add("-d");
 		if (isCurrentBranch()) {
 			commands.add("-c");
 		}
@@ -799,10 +798,23 @@ public class RepoScm extends SCM implements Serializable {
 		if (isNoTags()) {
 			commands.add("--no-tags");
 		}
+        debug.log(Level.INFO, "Syncing command: " + commands);
 
-		return launcher.launch().stdout(logger).pwd(workspace)
+        int syncCode = launcher.launch().stdout(logger).pwd(workspace)
                 .cmds(commands).envs(env).join();
-	}
+
+        if (syncCode == 0) {
+            List<String> repoStartCmd = new ArrayList<String>();
+            repoStartCmd.add(getDescriptor().getExecutable());
+            repoStartCmd.add("start");
+            repoStartCmd.add("--all");
+            repoStartCmd.add(JENKINS_BRANCH);
+
+            launcher.launch().stdout(logger).pwd(workspace)
+                    .cmds(repoStartCmd).envs(env).join();
+        }
+        return syncCode;
+    }
 
 	private boolean checkoutCode(final Launcher launcher,
 			final FilePath workspace,
@@ -870,16 +882,35 @@ public class RepoScm extends SCM implements Serializable {
 			}
 		}
 
-		returnCode = doSync(launcher, workspace, logger, env);
-		if (returnCode != 0) {
+        returnCode = doSync(launcher, workspace, logger, env);
+        debug.log(Level.INFO, "sync code=" + returnCode);
+        if (returnCode != 0) {
 			debug.log(Level.WARNING, "Sync failed. Resetting repository");
+
 			commands.clear();
 			commands.add(getDescriptor().getExecutable());
 			commands.add("forall");
 			commands.add("-c");
-			commands.add("git reset --hard");
+			commands.add("git reset --hard HEAD&& git clean -fdx");
 			launcher.launch().stdout(logger).pwd(workspace).cmds(commands)
 				.envs(env).join();
+
+			commands.clear();
+			commands.add(getDescriptor().getExecutable());
+			commands.add("sync");
+			commands.add("-d");
+			commands.add("-c");
+			launcher.launch().stdout(logger).pwd(workspace).cmds(commands)
+					.envs(env).join();
+
+			commands.clear();
+			commands.add(getDescriptor().getExecutable());
+			commands.add("start");
+			commands.add("--all");
+			commands.add(JENKINS_BRANCH);
+			launcher.launch().stdout(logger).pwd(workspace).cmds(commands)
+					.envs(env).join();
+
 			returnCode = doSync(launcher, workspace, logger, env);
 			if (returnCode != 0) {
 				return false;
@@ -903,7 +934,7 @@ public class RepoScm extends SCM implements Serializable {
 		launcher.launch().stderr(logger).stdout(output).pwd(workspace)
 				.cmds(commands).envs(env).join();
 		final String manifestText = output.toString();
-		debug.log(Level.FINEST, manifestText);
+		debug.log(Level.INFO, manifestText);
 		return manifestText;
 	}
 
@@ -920,7 +951,7 @@ public class RepoScm extends SCM implements Serializable {
 				new FilePath(workspace, ".repo/manifests"))
 				.cmds(commands).envs(env).join();
 		final String manifestText = output.toString().trim();
-		debug.log(Level.FINEST, manifestText);
+		debug.log(Level.INFO, manifestText);
 		return manifestText;
 	}
 
