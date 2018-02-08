@@ -90,11 +90,13 @@ public class RepoScm extends SCM implements Serializable {
 	@CheckForNull private String repoUrl;
 	@CheckForNull private String mirrorDir;
 	@CheckForNull private String manifestBranch;
-	@CheckForNull private int jobs;
+	@CheckForNull
+	private int jobs = 4;
 	@CheckForNull private int depth;
 	@CheckForNull private String localManifest;
 	@CheckForNull private String destinationDir;
-	@CheckForNull private boolean currentBranch;
+	@CheckForNull
+	private boolean currentBranch = true;
 	@CheckForNull private boolean resetFirst = true;
 	@CheckForNull private boolean cleanFirst;
 	@CheckForNull private boolean quiet;
@@ -746,6 +748,16 @@ public class RepoScm extends SCM implements Serializable {
 		build.addAction(new TagAction(build));
 	}
 
+	/**
+	 * 只同步当前分支，因为系统代码量太大，太占空间
+	 * @param launcher
+	 * @param workspace
+	 * @param logger
+	 * @param env
+	 * @return
+	 * @throws IOException
+	 * @throws InterruptedException
+	 */
 	private int doSync(final Launcher launcher, final FilePath workspace,
 			final OutputStream logger, final EnvVars env)
 		throws IOException, InterruptedException {
@@ -783,9 +795,7 @@ public class RepoScm extends SCM implements Serializable {
 		    commands.add("--trace");
 		}
 		commands.add("sync");
-		if (isCurrentBranch()) {
-			commands.add("-c");
-		}
+		commands.add("-c");
 		if (isQuiet()) {
 			commands.add("-q");
 		}
@@ -900,6 +910,15 @@ public class RepoScm extends SCM implements Serializable {
 			commands.add("sync");
 			commands.add("-d");
 			commands.add("-c");
+			commands.add("--jobs=4");
+			launcher.launch().stdout(logger).pwd(workspace).cmds(commands)
+					.envs(env).join();
+
+			commands.clear();
+			commands.add(getDescriptor().getExecutable());
+			commands.add("forall");
+			commands.add("-c");
+			commands.add("git branch -D " + JENKINS_BRANCH);
 			launcher.launch().stdout(logger).pwd(workspace).cmds(commands)
 					.envs(env).join();
 
