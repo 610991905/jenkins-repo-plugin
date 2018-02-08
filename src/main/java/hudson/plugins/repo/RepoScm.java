@@ -924,9 +924,8 @@ public class RepoScm extends SCM implements Serializable {
 
 			commands.clear();
 			commands.add(getDescriptor().getExecutable());
-			commands.add("forall");
-			commands.add("-c");
-			commands.add("git branch -D " + JENKINS_BRANCH);
+			commands.add("abandon");
+			commands.add(JENKINS_BRANCH);
 			launcher.launch().stdout(logger).pwd(workspace).cmds(commands)
 					.envs(env).join();
 
